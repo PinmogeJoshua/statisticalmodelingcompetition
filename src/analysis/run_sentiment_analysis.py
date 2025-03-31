@@ -1,6 +1,6 @@
 import os
 import sys
-from src.analysis.construct_mood_dict import analyze_sentiment
+from .construct_mood_dict import analyze_sentiment
 
 # 添加项目根目录到 sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
