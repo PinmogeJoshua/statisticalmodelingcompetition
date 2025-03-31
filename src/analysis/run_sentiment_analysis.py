@@ -1,6 +1,8 @@
 import os
 import sys
+import pandas as pd
 from .construct_mood_dict import analyze_sentiment
+from .statistics import calculate_emotion_proportions
 
 # 添加项目根目录到 sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -30,3 +32,27 @@ for file in input_files:
     analyze_sentiment(input_path, output_path)
 
 print("所有文件的情感分析已完成！结果保存在:", output_dir)
+
+# 定义一个列表用于存储所有文件的统计结果
+all_stats = []
+
+# 统计情绪比例
+for file in input_files:
+    input_path = os.path.join(input_dir, file)
+    output_path = os.path.join(output_dir, f"{os.path.splitext(file)[0]}_sentiment.xlsx")
+    
+    print(f"正在处理文件: {input_path}")
+    analyze_sentiment(input_path, output_path)
+
+    # 调用统计功能
+    stats = calculate_emotion_proportions(output_path)
+    stats['file_name'] = file  # 添加文件名到统计结果
+    all_stats.append(stats)  # 将结果添加到列表中
+    print(f"文件 {file} 的情绪比例统计结果：", stats)
+
+# 将所有统计结果保存到一个 Excel 文件
+stats_output_path = os.path.join(output_dir, "emotion_statistics_summary.xlsx")
+df_stats = pd.DataFrame(all_stats)
+df_stats.to_excel(stats_output_path, index=False)
+
+print(f"所有情绪比例统计结果已保存到：{stats_output_path}")
