@@ -1,4 +1,4 @@
-"""情感词典加载相关工具"""
+"""情感词典基础加载工具"""
 import os
 import traceback
 from .file_utils import detect_file_encoding

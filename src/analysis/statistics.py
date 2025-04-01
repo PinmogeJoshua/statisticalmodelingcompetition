@@ -6,10 +6,10 @@ import traceback
 from openpyxl import load_workbook
 
 # 从拆分的模块中导入函数
-from utils.file_utils import detect_file_encoding
-from utils.sentiment_utils import load_custom_sentiment_dicts
-from utils.data_utils import safe_read_file
-from analysis.sentiment_analysis import analyze_sentiment_with_custom_dict
+from src.utils.file_utils import detect_file_encoding
+from src.utils.sentiment_utils import load_custom_sentiment_dicts
+from src.utils.data_utils import safe_read_file
+from src.analysis.sentiment_analysis import analyze_sentiment_with_custom_dict
 
 def process_file(input_file, output_dir, text_column, positive_words, negative_words):
     """增强的文件处理函数，添加更多验证和错误处理"""
