@@ -74,12 +74,14 @@ pip [run_enhanced_analysis.py](http://_vscodecontentref_/6) --input data/segment
 
 ## 注意事项
 确保输入文件的编码格式正确（推荐 UTF-8）。
+
 如果需要支持中文词云，请确保系统中安装了中文字体（如 SimHei 字体）。
 
 ---
 
 ## 开发者
 作者：Pinmoge
+
 邮箱：stellewang0417@qq.com
 
 ---
