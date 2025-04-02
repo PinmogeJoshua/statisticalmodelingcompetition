@@ -1,3 +1,11 @@
 pandas
 gensim
 openpyxl
+tqdm
+matplotlib
+seaborn
+jieba
+scikit-learn
+wordcloud
+snownlp
+chardet
