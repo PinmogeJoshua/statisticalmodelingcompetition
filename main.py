@@ -12,8 +12,10 @@ plt.rcParams['axes.unicode_minus'] = False
 from data_loader import load_sentiment_data, preprocess_text, get_feature_importance_data
 from satisfaction_model import build_satisfaction_model
 from feature_analysis import analyze_feature_factors, identify_key_factors
-from results_discussion import evaluate_and_discuss
+from results_discussion import evaluate_and_discuss, update_report_with_bert_results
 from bert_preference_analysis import analyze_user_preferences
+from results_discussion import update_report_with_bert_results
+import traceback
 
 def main():
     print("第六章：用户满意度模型与特征因素分析")
@@ -76,16 +78,18 @@ def main():
     # 第七步：BERT用户偏好分析
     print("\n7. BERT用户偏好分析...")
     try:
+        # 执行BERT分析
         bert_results = analyze_user_preferences(df, feature_data)
         
-        # 如果BERT分析成功，将结果添加到报告
+        # 如果分析成功，更新报告
         if bert_results:
-            # 从results_discussion模块导入更新报告的函数
-            from results_discussion import update_report_with_bert_results
             update_report_with_bert_results(df, bert_results)
+            print("BERT分析结果已添加到报告")
     except Exception as e:
         print(f"BERT分析失败: {str(e)}")
-        print("继续其他分析...")
+        print("错误详情:")
+        traceback.print_exc()
+        print("\n继续其他分析...")
         bert_results = None
     
     # 第八步：保存原始数据与分析结果

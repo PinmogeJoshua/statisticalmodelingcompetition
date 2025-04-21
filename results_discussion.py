@@ -230,7 +230,7 @@ def update_report_with_bert_results(df, bert_results):
                 f.write("下表展示了各产品用户在不同偏好群体中的分布百分比:\n\n")
                 f.write(product_cluster_dist.to_markdown() + "\n\n")
                 
-                f.write("### 5.3 基于BERT分析的产品策略\n\n")
+                f.write("### 5.3 基于BERT分析的营销建议\n\n")
                 
                 for product in df['product'].unique():
                     f.write(f"#### {product}\n\n")

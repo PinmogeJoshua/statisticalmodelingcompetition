@@ -1,5 +1,4 @@
 import torch
-from transformers import BertTokenizer, BertModel
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,14 +7,8 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
 import os
 
-def setup_bert_model():
-    """加载BERT模型和分词器"""
-    print("加载BERT模型...")
-    # 使用中文BERT预训练模型
-    model_name = "bert-base-chinese"
-    tokenizer = BertTokenizer.from_pretrained(model_name)
-    model = BertModel.from_pretrained(model_name)
-    return tokenizer, model
+# 导入本地模型加载器
+from bert_model_loader import load_local_bert_model as load_bert_model
 
 def extract_bert_embeddings(df, tokenizer, model, batch_size=16):
     """使用BERT提取评论的语义嵌入"""
@@ -56,28 +49,28 @@ def analyze_user_preferences(df, feature_data=None):
     os.makedirs('results', exist_ok=True)
     
     try:
-        # 加载BERT模型
-        tokenizer, model = setup_bert_model()
+        # 加载本地BERT模型
+        tokenizer, model = load_bert_model()
+        if tokenizer is None or model is None:
+            raise ValueError("BERT模型加载失败，无法进行分析")
         
         # 提取评论嵌入
         embeddings = extract_bert_embeddings(df, tokenizer, model)
-        
-        # 将评论嵌入与产品信息关联
-        df_with_embeddings = df.copy()
         
         # 使用降维技术将高维BERT嵌入降到2维进行可视化
         from sklearn.manifold import TSNE
         from sklearn.decomposition import PCA
         
         # 使用PCA初步降维以加速t-SNE
-        pca = PCA(n_components=50)
+        pca = PCA(n_components=min(50, embeddings.shape[1], embeddings.shape[0]))
         reduced_embeddings = pca.fit_transform(embeddings)
         
         # 使用t-SNE进一步降维到2维
-        tsne = TSNE(n_components=2, random_state=42, perplexity=30)
+        tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(df)/10))
         embeddings_2d = tsne.fit_transform(reduced_embeddings)
         
         # 添加2D嵌入到DataFrame
+        df_with_embeddings = df.copy()
         df_with_embeddings['embedding_x'] = embeddings_2d[:, 0]
         df_with_embeddings['embedding_y'] = embeddings_2d[:, 1]
         
@@ -86,7 +79,7 @@ def analyze_user_preferences(df, feature_data=None):
         
         # 为不同产品分配不同颜色
         products = df['product'].unique()
-        product_colors = dict(zip(products, plt.get_cmap('tab10')(np.linspace(0, 1, len(products)))))
+        product_colors = dict(zip(products, plt.cm.get_cmap('tab10')(np.linspace(0, 1, len(products)))))
         
         for product in products:
             product_df = df_with_embeddings[df_with_embeddings['product'] == product]
@@ -111,38 +104,50 @@ def analyze_user_preferences(df, feature_data=None):
         
         # 聚类分析用户偏好
         print("\n使用聚类分析用户评论...")
-        kmeans = KMeans(n_clusters=5, random_state=42)
+        kmeans = KMeans(n_clusters=min(5, len(df)//100+1), random_state=42)
         df_with_embeddings['cluster'] = kmeans.fit_predict(embeddings)
         
         # 计算每个聚类的特征偏好得分
         feature_factors = ['性价比', '质量', '购物体验', '实用性']
         cluster_preferences = {}
         
+        # 创建特征关键词列表，用于文本匹配
+        feature_keywords = {
+            '性价比': ['性价比', '价格', '便宜', '实惠', '划算', '物美价廉', '经济', '实在'],
+            '质量': ['质量', '做工', '材质', '耐用', '可靠', '精细', '坚固', '牢靠', '好用'],
+            '购物体验': ['服务', '物流', '送货', '包装', '客服', '态度', '速度', '体验', '快递'],
+            '实用性': ['实用', '功能', '方便', '好用', '设计', '操作', '使用', '效果', '效率']
+        }
+        
+        # 使用词频统计方法计算偏好得分
         for cluster in df_with_embeddings['cluster'].unique():
             cluster_df = df_with_embeddings[df_with_embeddings['cluster'] == cluster]
+            cluster_comments = cluster_df['comment'].astype(str).tolist()
             cluster_preferences[cluster] = {}
             
+            # 统计每个评论中各特征的提及情况
             for factor in feature_factors:
-                factor_score_col = f'{factor}_score'
-                if factor_score_col in cluster_df.columns:
-                    # 计算该聚类中此特征的平均得分
-                    avg_score = cluster_df[factor_score_col].mean()
-                else:
-                    # 如果没有特征得分列，可能是因为没有通过has_*列提取特征
-                    # 使用提及次数作为替代
-                    has_factor_col = f'has_{factor}'
-                    factor_count_col = f'{factor}_count'
-                    
-                    if has_factor_col in cluster_df.columns:
-                        mention_rate = cluster_df[has_factor_col].mean()
-                        avg_score = mention_rate * 2  # 简单放大，使得范围在0-2之间
-                    elif factor_count_col in cluster_df.columns:
-                        avg_count = cluster_df[factor_count_col].mean()
-                        avg_score = avg_count  
-                    else:
-                        avg_score = 0.0
+                keywords = feature_keywords[factor]
+                factor_mentions = 0
+                factor_sentiment = 0
                 
-                cluster_preferences[cluster][factor] = avg_score
+                # 遍历该聚类的所有评论
+                for i, comment in enumerate(cluster_comments):
+                    # 计算特征关键词的出现次数
+                    mention_count = sum(1 for keyword in keywords if keyword in comment)
+                    sentiment = cluster_df.iloc[i]['sentiment'] if mention_count > 0 else 0
+                    
+                    factor_mentions += mention_count
+                    factor_sentiment += sentiment * mention_count
+                
+                # 计算特征偏好得分 = 提及次数 * 情感系数
+                if factor_mentions > 0:
+                    # 归一化特征得分: 提及频率 * 情感倾向
+                    score = (factor_mentions / len(cluster_comments)) * (factor_sentiment / factor_mentions + 1)
+                else:
+                    score = 0.01  # 避免完全为0
+                    
+                cluster_preferences[cluster][factor] = score
         
         # 将聚类偏好转换为DataFrame并可视化
         cluster_pref_df = pd.DataFrame(cluster_preferences).T
@@ -170,8 +175,10 @@ def analyze_user_preferences(df, feature_data=None):
         )
         
         # 为每个聚类绘制雷达图
+        n_clusters = len(cluster_pref_normalized.index)
+        n_rows = (n_clusters + 2) // 3  # 每行最多3个图
         for i, cluster in enumerate(cluster_pref_normalized.index):
-            ax = plt.subplot(2, 3, i+1, polar=True)
+            ax = plt.subplot(n_rows, 3, i+1, polar=True)
             
             # 准备雷达图数据
             values = cluster_pref_normalized.loc[cluster].tolist()
@@ -208,52 +215,61 @@ def analyze_user_preferences(df, feature_data=None):
             f.write("不同用户群体对产品特征的偏好程度：\n\n")
             f.write(cluster_pref_df.to_markdown() + "\n\n")
             
-            f.write("## 3. 用户偏好洞察\n\n")
+            # 为每个产品分析主要用户群体
+            product_cluster = pd.crosstab(
+                df_with_embeddings['product'], 
+                df_with_embeddings['cluster'], 
+                normalize='index'
+            ) * 100
             
-            # 为每个聚类提供一些洞察
-            for cluster in cluster_pref_df.index:
-                f.write(f"### 聚类 {cluster} 用户群体\n\n")
-                
-                # 找出该聚类最偏好和最不偏好的特征
-                pref_series = cluster_pref_df.loc[cluster]
-                most_pref = pref_series.nlargest(2)
-                least_pref = pref_series.nsmallest(2)
-                
-                f.write(f"- **群体规模**: {cluster_stats.loc[cluster, '评论数量']} 条评论\n")
-                f.write(f"- **情感倾向**: {cluster_stats.loc[cluster, '正面评论比例(%)']:.2f}% 正面评论\n")
-                f.write(f"- **最关注特征**: {most_pref.index.tolist()[0]} (得分: {most_pref.values[0]:.2f}), {most_pref.index.tolist()[1]} (得分: {most_pref.values[1]:.2f})\n")
-                f.write(f"- **最不关注特征**: {least_pref.index.tolist()[0]} (得分: {least_pref.values[0]:.2f}), {least_pref.index.tolist()[1]} (得分: {least_pref.values[1]:.2f})\n\n")
-                
-                # 分析该聚类的产品偏好
-                cluster_product_dist = df_with_embeddings[df_with_embeddings['cluster'] == cluster]['product'].value_counts(normalize=True) * 100
-                f.write("**产品偏好分布**:\n\n")
-                for product, pct in cluster_product_dist.items():
-                    f.write(f"- {product}: {pct:.2f}%\n")
-                f.write("\n")
+            f.write("## 3. 产品与用户群体关系\n\n")
+            f.write("各产品用户在不同偏好群体中的分布(%)：\n\n")
+            f.write(product_cluster.to_markdown() + "\n\n")
             
-            f.write("## 4. 产品推荐策略\n\n")
-            f.write("基于用户偏好分析，可以制定以下产品推荐策略：\n\n")
-            
-            # 为每个产品提供一些基于用户偏好的推荐策略
+            f.write("## 4. 产品优化建议\n\n")
             for product in df['product'].unique():
                 f.write(f"### {product}\n\n")
                 
-                # 找出对该产品评论最多的聚类
-                product_clusters = df_with_embeddings[df_with_embeddings['product'] == product]['cluster'].value_counts()
-                main_cluster = product_clusters.index[0]
-                
-                f.write(f"- **主要用户群体**: 聚类 {main_cluster} (占比: {product_clusters[main_cluster]/product_clusters.sum()*100:.2f}%)\n")
-                f.write(f"- **用户偏好特征**: {cluster_pref_df.loc[main_cluster].nlargest(2).index.tolist()}\n")
-                f.write(f"- **推荐策略**: 根据该用户群体的特征偏好，在产品营销中强调其{cluster_pref_df.loc[main_cluster].nlargest(1).index.tolist()[0]}和{cluster_pref_df.loc[main_cluster].nlargest(2).index.tolist()[1]}特性\n\n")
+                if product in product_cluster.index:
+                    # 找出该产品最主要的用户群体
+                    main_cluster = product_cluster.loc[product].idxmax()
+                    main_pct = product_cluster.loc[product, main_cluster]
+                    
+                    # 找出该群体最在意的特征（如果没有特征得分，则使用所有产品评论计算）
+                    if main_cluster in cluster_pref_df.index and cluster_pref_df.loc[main_cluster].max() > 0:
+                        top_features = cluster_pref_df.loc[main_cluster].nlargest(2).index.tolist()
+                        bottom_features = cluster_pref_df.loc[main_cluster].nsmallest(2).index.tolist()
+                        
+                        f.write(f"- **主要用户群体**: 聚类 {main_cluster} (占比: {main_pct:.1f}%)\n")
+                        f.write(f"- **核心关注特征**: {', '.join(top_features)}\n")
+                        f.write(f"- **建议**: 强化{top_features[0]}方面的体验，提升{bottom_features[0]}特性\n\n")
+                        
+                        # 根据不同特征提供具体建议
+                        if top_features[0] == '性价比':
+                            f.write("  - **价格策略**: 考虑优化定价或提供促销活动，突出产品性价比\n")
+                        elif top_features[0] == '质量':
+                            f.write("  - **品质保证**: 在产品宣传中强调高品质工艺和可靠性\n")
+                        elif top_features[0] == '购物体验':
+                            f.write("  - **服务优化**: 提升物流、包装和客服质量，改善整体购物体验\n")
+                        elif top_features[0] == '实用性':
+                            f.write("  - **功能宣传**: 重点展示产品的实用功能和便捷操作方式\n")
+                    else:
+                        # 如果没有有效特征得分，提供通用建议
+                        f.write(f"- **主要用户群体**: 聚类 {main_cluster} (占比: {main_pct:.1f}%)\n")
+                        f.write("- **建议**: 基于整体数据分析，建议全面提升产品质量与购物体验\n\n")
         
-        print("BERT用户偏好分析完成，结果保存至'results/bert_preference_analysis.md'")
+        print("BERT用户偏好分析完成，结果已保存")
         
         return {
             'embeddings': embeddings,
             'cluster_preferences': cluster_pref_df,
-            'user_clusters': df_with_embeddings['cluster']
+            'user_clusters': df_with_embeddings['cluster'],
+            'visualization_path': 'results/bert_comment_embeddings.png',
+            'report_path': 'results/bert_preference_analysis.md'
         }
         
     except Exception as e:
+        import traceback
         print(f"BERT用户偏好分析失败: {str(e)}")
+        traceback.print_exc()
         return None
