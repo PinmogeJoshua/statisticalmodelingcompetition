@@ -12,9 +12,9 @@ plt.rcParams['axes.unicode_minus'] = False
 from data_loader import load_sentiment_data, preprocess_text, get_feature_importance_data
 from satisfaction_model import build_satisfaction_model
 from feature_analysis import analyze_feature_factors, identify_key_factors
-from results_discussion import evaluate_and_discuss, update_report_with_bert_results
-from bert_preference_analysis import analyze_user_preferences
-from results_discussion import update_report_with_bert_results
+from results_discussion import evaluate_and_discuss
+from deep_learning_model import build_deep_learning_model, compare_with_traditional_models
+# 删除BERT相关的导入
 import traceback
 
 def main():
@@ -31,6 +31,12 @@ def main():
     print(f"- 产品数量: {df['product'].nunique()}")
     print(f"- 正面评论: {len(df[df['sentiment'] == 1])}")
     print(f"- 负面评论: {len(df[df['sentiment'] == -1])}")
+    
+    # 应用增强特征工程
+    print("\n1.1 应用增强特征工程...")
+    from data_loader import enhanced_feature_engineering
+    df = enhanced_feature_engineering(df)
+    print(f"- 特征工程后的特征数量: {len(df.columns)}")
     
     # 获取特征因素数据
     feature_data = get_feature_importance_data()
@@ -75,25 +81,10 @@ def main():
     print("\n6. 结果评估与讨论...")
     discussion_results = evaluate_and_discuss(df, model_results, feature_analysis_results)
 
-    # 第七步：BERT用户偏好分析
-    print("\n7. BERT用户偏好分析...")
-    try:
-        # 执行BERT分析
-        bert_results = analyze_user_preferences(df, feature_data)
-        
-        # 如果分析成功，更新报告
-        if bert_results:
-            update_report_with_bert_results(df, bert_results)
-            print("BERT分析结果已添加到报告")
-    except Exception as e:
-        print(f"BERT分析失败: {str(e)}")
-        print("错误详情:")
-        traceback.print_exc()
-        print("\n继续其他分析...")
-        bert_results = None
+    # 删除BERT分析部分
     
-    # 第八步：保存原始数据与分析结果
-    print("\n8. 保存分析结果...")
+    # 第七步：保存原始数据与分析结果
+    print("\n7. 保存分析结果...")
     
     # 保存原始预处理数据
     df.to_csv('results/processed_data.csv', index=False)
@@ -136,20 +127,25 @@ def main():
             for rec in data['recommendations']:
                 f.write(f"     建议: {rec}\n")
             f.write("\n")
-        
-        # 添加BERT分析结果到摘要
-        if bert_results:
-            f.write("7. BERT用户偏好分析\n")
-            if 'cluster_preferences' in bert_results:
-                f.write("   用户群体特征偏好:\n")
-                for cluster, prefs in bert_results['cluster_preferences'].iterrows():
-                    top_pref = prefs.nlargest(1).index[0]
-                    f.write(f"   - 用户群体 {cluster}: 最关注 {top_pref}\n")
-            f.write("   详细分析请参阅 'results/bert_preference_analysis.md'\n\n")
+            
+        print("\n7. 使用深度学习模型进行分析...")
+        dl_results = build_deep_learning_model(df)
+
+        # 比较深度学习模型与传统模型性能
+        print("\n8. 比较深度学习与传统模型性能...")
+        model_comparison = compare_with_traditional_models(dl_results, model_results)
+
+        # 将比较结果添加到分析摘要
+        with open('results/analysis_summary.txt', 'a', encoding='utf-8') as f:
+            f.write("\n7. 深度学习模型分析\n")
+            f.write(f"   - 模型准确率: {dl_results['accuracy']:.4f}\n")
+            f.write("   - 模型性能比较：\n")
+            for i, row in model_comparison.iterrows():
+                f.write(f"     {row['模型']}: {row['准确率']:.4f}\n")
+            f.write("\n")
     
     print("\n所有结果已统一保存至results文件夹")
     print("第六章分析完成！")
 
 if __name__ == "__main__":
     main()
-    

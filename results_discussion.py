@@ -115,25 +115,42 @@ def evaluate_and_discuss(df, model_results, feature_analysis_results):
             'recommendations': []
         }
         
-        # 根据劣势生成建议
+        # 根据劣势生成详细建议
         for weakness in weaknesses:
             if weakness == '性价比':
-                product_improvements[product]['recommendations'].append(
-                    "提高性价比：重新评估产品定价或增加产品价值，提高消费者感知的价值")
+                product_improvements[product]['recommendations'].extend([
+                    "重新评估产品定价策略，可考虑推出不同价位的产品系列，满足不同消费者的需求",
+                    "增加产品附加价值，如延长保修期或提供免费售后服务，提高消费者对价格的接受度",
+                    "通过改进生产流程降低成本，将节约的成本转化为价格优势"
+                ])
             elif weakness == '质量':
-                product_improvements[product]['recommendations'].append(
-                    "提升产品质量：改进产品材料和生产工艺，提高产品耐用性和可靠性")
+                product_improvements[product]['recommendations'].extend([
+                    "加强质量控制体系，引入更严格的产品测试标准",
+                    "更新产品材料和工艺，提高产品的耐用性和可靠性",
+                    "建立完善的质量反馈机制，及时收集和处理客户对产品质量的投诉",
+                    "引入国际质量管理标准，如ISO9001认证"
+                ])
             elif weakness == '购物体验':
-                product_improvements[product]['recommendations'].append(
-                    "优化购物体验：改进物流配送速度，加强客服培训，提升服务质量")
+                product_improvements[product]['recommendations'].extend([
+                    "优化网站/APP界面，提高用户友好性",
+                    "加强物流配送能力，缩短配送时间",
+                    "培训客服团队，提高服务质量和响应速度",
+                    "增加在线咨询和售后支持渠道",
+                    "完善产品展示和说明，提供详细的参数、使用方法和注意事项"
+                ])
             elif weakness == '实用性':
-                product_improvements[product]['recommendations'].append(
-                    "增强实用性：深入了解用户需求，改进产品设计，提高易用性和功能性")
+                product_improvements[product]['recommendations'].extend([
+                    "通过用户调研深入了解目标客户的实际需求",
+                    "重新设计产品，增强功能性和易用性",
+                    "提供详细的使用指南和视频教程，帮助用户充分利用产品功能",
+                    "简化产品操作流程，提高直观性",
+                    "增加产品的多功能性，满足用户多样化需求"
+                ])
     
     # 6. 生成总结报告
     print("\n6. 生成总结报告...")
     
-    # 删除使用bert_results的部分，改为在update_report_with_bert_results函数中处理
+    # 删除BERT相关代码
     
     with open('results/analysis_report.md', 'w', encoding='utf-8') as f:
         f.write("# 用户满意度模型与特征因素分析报告\n\n")
@@ -196,56 +213,5 @@ def evaluate_and_discuss(df, model_results, feature_analysis_results):
         'model_comparison': models_comparison,
         'product_improvements': product_improvements,
     }
-    
-def update_report_with_bert_results(df, bert_results):
-    """将BERT分析结果更新到报告中"""
-    if not bert_results:
-        print("没有BERT分析结果可添加到报告")
-        return
-        
-    print("将BERT分析结果添加到报告...")
-    
-    with open('results/analysis_report.md', 'a', encoding='utf-8') as f:
-        f.write("\n## 5. BERT用户偏好分析结果\n\n")
-        
-        f.write("通过深度语义分析，我们将用户按偏好特征分为不同群体:\n\n")
-        
-        if 'cluster_preferences' in bert_results:
-            # 添加用户群体偏好表
-            f.write("### 5.1 用户群体偏好特征\n\n")
-            f.write(bert_results['cluster_preferences'].to_markdown() + "\n\n")
-            
-            # 统计每个群体的产品分布
-            if 'user_clusters' in bert_results:
-                user_df = df.copy()
-                user_df['cluster'] = bert_results['user_clusters']
-                
-                f.write("### 5.2 用户群体与产品关系\n\n")
-                product_cluster_dist = pd.crosstab(
-                    user_df['product'], 
-                    user_df['cluster'], 
-                    normalize='index'
-                ) * 100
-                
-                f.write("下表展示了各产品用户在不同偏好群体中的分布百分比:\n\n")
-                f.write(product_cluster_dist.to_markdown() + "\n\n")
-                
-                f.write("### 5.3 基于BERT分析的营销建议\n\n")
-                
-                for product in df['product'].unique():
-                    f.write(f"#### {product}\n\n")
-                    
-                    if product in product_cluster_dist.index:
-                        main_cluster = product_cluster_dist.loc[product].idxmax()
-                        main_pct = product_cluster_dist.loc[product, main_cluster]
-                        
-                        f.write(f"- **主要用户群体**: 群体 {main_cluster} (占比: {main_pct:.1f}%)\n")
-                        
-                        if main_cluster in bert_results['cluster_preferences'].index:
-                            prefs = bert_results['cluster_preferences'].loc[main_cluster]
-                            top_features = prefs.nlargest(2).index.tolist()
-                            
-                            f.write(f"- **核心关注点**: {', '.join(top_features)}\n")
-                            f.write(f"- **营销建议**: 突出产品的{top_features[0]}特性，强化{top_features[1]}方面的体验\n\n")
-        
-        f.write("详细的BERT用户偏好分析请参考 [BERT用户偏好分析报告](bert_preference_analysis.md)\n\n")
+
+# 删除update_report_with_bert_results函数

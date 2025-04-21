@@ -116,6 +116,81 @@ def preprocess_text(df):
     print("文本预处理完成")
     return df
 
+# 在 preprocess_text 函数后添加：
+
+def enhanced_feature_engineering(df):
+    """增强特征工程，添加交互特征和多项式特征"""
+    print("执行增强特征工程...")
+    
+    df_engineered = df.copy()
+    
+    # 1. 添加交互特征
+    for i, feat1 in enumerate(['性价比', '质量', '购物体验', '实用性']):
+        for j, feat2 in enumerate(['性价比', '质量', '购物体验', '实用性']):
+            if i < j:  # 避免重复
+                # 添加计数和得分的交互特征
+                df_engineered[f'{feat1}_{feat2}_count_interact'] = df_engineered[f'{feat1}_count'] * df_engineered[f'{feat2}_count']
+                df_engineered[f'{feat1}_{feat2}_score_interact'] = df_engineered[f'{feat1}_score'] * df_engineered[f'{feat2}_score']
+                print(f"- 创建交互特征: {feat1}_{feat2}")
+    
+    # 2. 添加多项式特征
+    for feat in ['性价比', '质量', '购物体验', '实用性']:
+        df_engineered[f'{feat}_count_squared'] = df_engineered[f'{feat}_count'] ** 2
+        df_engineered[f'{feat}_score_squared'] = df_engineered[f'{feat}_score'] ** 2
+        print(f"- 创建多项式特征: {feat} 平方项")
+    
+    # 3. 添加评论长度的归一化和划分特征
+    # 评论长度分段
+    df_engineered['comment_length_norm'] = (df_engineered['comment_length'] - df_engineered['comment_length'].mean()) / df_engineered['comment_length'].std()
+    
+    # 将评论长度分为短、中、长三类
+    length_bins = [0, 50, 200, float('inf')]
+    length_labels = ['short', 'medium', 'long']
+    df_engineered['comment_length_category'] = pd.cut(df_engineered['comment_length'], bins=length_bins, labels=length_labels)
+    
+    # 将分类转换为独热编码
+    comment_length_dummies = pd.get_dummies(df_engineered['comment_length_category'], prefix='comment_length')
+    df_engineered = pd.concat([df_engineered, comment_length_dummies], axis=1)
+    print("- 创建评论长度分类特征")
+    
+    # 4. 添加特征组合比率
+    for feat in ['性价比', '质量', '购物体验', '实用性']:
+        # 计算特征得分与计数的比率
+        df_engineered[f'{feat}_score_count_ratio'] = df_engineered[f'{feat}_score'] / (df_engineered[f'{feat}_count'] + 1)  # 加1避免除零
+        print(f"- 创建比率特征: {feat}_score_count_ratio")
+    
+    print(f"增强特征工程完成，从{len(df.columns)}个特征扩展到{len(df_engineered.columns)}个特征")
+    
+    # 5. 处理极端值和异常值
+    numeric_cols = df_engineered.select_dtypes(include=['float64', 'int64']).columns
+    for col in numeric_cols:
+        # 计算第1和第99百分位数
+        q1 = df_engineered[col].quantile(0.01)
+        q99 = df_engineered[col].quantile(0.99)
+        
+        # 限制极端值
+        if col != 'sentiment':  # 不处理目标变量
+            df_engineered[col] = df_engineered[col].clip(q1, q99)
+            print(f"- 处理特征 {col} 的极端值")
+    
+    # 6. 添加聚类特征
+    from sklearn.cluster import KMeans
+    
+    # 选择用于聚类的数值特征
+    cluster_features = ['性价比_score', '质量_score', '购物体验_score', '实用性_score']
+    
+    if all(feat in df_engineered.columns for feat in cluster_features):
+        # 进行K-means聚类
+        print("- 添加聚类特征")
+        kmeans = KMeans(n_clusters=3, random_state=42)
+        df_engineered['cluster'] = kmeans.fit_predict(df_engineered[cluster_features])
+        
+        # 转换为独热编码
+        cluster_dummies = pd.get_dummies(df_engineered['cluster'], prefix='cluster')
+        df_engineered = pd.concat([df_engineered, cluster_dummies], axis=1)
+    
+    return df_engineered
+
 def get_feature_importance_data():
     """获取特征因素数据"""
     # 表3: 新特征因素表
